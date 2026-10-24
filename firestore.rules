@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    match /users/{uid} {
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.role == "provider";
+      allow read: if signedIn() && request.auth.uid == uid || isAdmin();
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.role == resource.data.role
+        || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /providers/{providerId} {
+      allow read: if resource.data.status == "approved"
+        || (signedIn() && resource.data.ownerUid == request.auth.uid)
+        || isAdmin();
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.name is string
+        && request.resource.data.category is string
+        && request.resource.data.phone is string
+        && request.resource.data.address is string;
+
+      allow update: if isAdmin()
+        || (signedIn()
+          && resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.createdAt is int);
+
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+  }
+}
